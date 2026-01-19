@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datadog Tracing Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+        }
+        #btn-sucesso { background-color: #4CAF50; }
+        #btn-erro { background-color: #f44336; }
+        #btn-aviso { background-color: #ff9800; }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            min-height: 50px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Aplicação de Teste Datadog</h1>
+        <p>Clique nos botões abaixo para simular diferentes tipos de requisições e gerar logs/traces:</p>
+        
+        <button id="btn-sucesso" onclick="fazerRequisicao('sucesso')">Requisição de Sucesso (200)</button>
+        <button id="btn-erro" onclick="fazerRequisicao('erro')">Requisição com Erro (500)</button>
+        <button id="btn-aviso" onclick="fazerRequisicao('desconhecida')">Ação Desconhecida (400)</button>
+
+        <h2>Resultado da Requisição:</h2>
+        <div id="output">Aguardando ação...</div>
+    </div>
+
+    <script>
+        function fazerRequisicao(acao) {
+            const output = document.getElementById('output');
+            output.innerHTML = 'Processando...';
+            output.style.color = 'black';
+
+            fetch('/api/fazer_requisicao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ acao: acao }),
+            })
+            .then(response => {
+                // O Datadog precisa que o trace seja propagado, então vamos garantir que a resposta seja lida
+                return response.json().then(data => ({ 
+                    status: response.status, 
+                    body: data 
+                }));
+            })
+            .then(result => {
+                output.innerHTML = `Status HTTP: ${result.status}<br>Mensagem: ${result.body.mensagem}`;
+                output.style.color = result.status >= 400 ? 'red' : 'green';
+            })
+            .catch(error => {
+                output.innerHTML = `Erro de rede ou falha na requisição: ${error}`;
+                output.style.color = 'red';
+            });
+        }
+    </script>
+</body>
+</html>

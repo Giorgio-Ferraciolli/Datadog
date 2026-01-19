@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Serviço da Aplicação Python
+  app:
+    build: .
+    container_name: log_traces_giorgio_app
+    ports:
+      - "5000:5000"
+    environment:
+      # Configurações do Datadog Tracing
+      - DD_SERVICE=log_traces_giorgio # Nome da aplicação no Datadog
+      - DD_ENV=dev
+      - DD_VERSION=1.0
+      - DD_AGENT_HOST=datadog-agent # Nome do host do Agent no docker-compose
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_LOGS_INJECTION=true # Injeta o trace_id e span_id nos logs
+      - DD_PROFILING_ENABLED=true
+
+
+    # Comando para rodar a aplicação com Gunicorn
+    command: gunicorn --bind 0.0.0.0:5000 --access-logfile - --error-logfile - wsgi:app
+    depends_on:
+      - datadog-agent
+
+  # Serviço do Datadog Agent
+  datadog-agent:
+    image: datadog/agent:latest
+    container_name: datadog-agent
+    environment:
+      - DD_API_KEY=e4e6c70113469277179a34c890af88d3 # Sua chave de API do Datadog
+      - DD_SITE=datadoghq.com
+      - DD_APM_ENABLED=true # Habilita o APM (Tracing)
+      - DD_LOGS_ENABLED=true # Habilita a coleta de Logs
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true # Coleta logs de todos os containers
+      - DD_PROCESS_AGENT_ENABLED=true
+      - DD_SYSTEM_PROBE_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup/:ro
+
+    ports:
+      - "8126:8126/tcp" # Porta para o APM (Tracing)
+      - "8125:8125/udp" # Porta para o DogStatsD (Métricas)
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
