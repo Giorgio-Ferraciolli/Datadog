@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-Aqui nesse diretório, estão alguns projetos de exemplos bem úteis para observabilidade com Datadog.
-=======
 # Aplicação Python com Flask, Docker e Datadog
 
 Esta é uma aplicação de demonstração simples em Python (Flask) configurada para rodar em Docker com Docker Compose e integrada com o Datadog para envio de logs e traces (APM).
