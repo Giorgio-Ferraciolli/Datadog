@@ -28,7 +28,7 @@ services:
     image: datadog/agent:latest
     container_name: datadog-agent
     environment:
-      - DD_API_KEY=e4e6c70113469277179a34c890af88d3 # Sua chave de API do Datadog
+      - DD_API_KEY= # Sua chave de API do Datadog
       - DD_SITE=datadoghq.com
       - DD_APM_ENABLED=true # Habilita o APM (Tracing)
       - DD_LOGS_ENABLED=true # Habilita a coleta de Logs
