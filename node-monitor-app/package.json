@@ -1,0 +1,17 @@
+{
+  "name": "dd-node-monitor-app",
+  "version": "1.0.0",
+  "description": "Aplicação Node.js simples para monitorar com Datadog",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js"
+  },
+  "dependencies": {
+    "dd-trace": "^5.40.0",
+    "express": "^4.19.2",
+    "hot-shots": "^10.1.2",
+    "pino": "^9.3.2"
+  }
+}
