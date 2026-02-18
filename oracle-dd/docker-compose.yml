@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+
+  # Container do Oracle XE
+  oracle-xe:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: oracle-xe
+    hostname: oracle-xe
+
+    ports:
+      - "1521:1521"
+
+    environment:
+      # senha do SYS, SYSTEM e PDBADMIN
+      ORACLE_PASSWORD: datadog
+
+    volumes:
+      # scripts executados automaticamente na primeira inicialização
+      - ./oracle/init:/container-entrypoint-initdb.d
+
+    restart: unless-stopped
+
+
+  # Container do Datadog Agent
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:latest
+    container_name: datadog-agent
+
+    environment:
+      # coloque sua API KEY do Datadog aqui
+      DD_API_KEY: SUA_API_KEY_AQUI
+
+      # habilita coleta de métricas
+      DD_SITE: datadoghq.com
+
+      # habilita DB Monitoring
+      DD_DATABASE_MONITORING_ENABLED: "true"
+
+    volumes:
+      # arquivo principal de configuração
+      - ./datadog/datadog.yaml:/etc/datadog-agent/datadog.yaml
+
+      # configuração da integração Oracle
+      - ./datadog/conf.d:/etc/datadog-agent/conf.d
+
+      # acesso ao docker host (necessário em alguns casos)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    depends_on:
+      - oracle-xe
+
+    restart: unless-stopped
