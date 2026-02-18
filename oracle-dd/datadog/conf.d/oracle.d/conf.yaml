@@ -1,26 +1,15 @@
-## Configuração da integração Oracle para o Datadog
-
 init_config:
 
 instances:
 
-  - server: oracle-xe
-    port: 1521
+  - server: ${ORACLE_HOST}
+    port: ${ORACLE_PORT}
+    service_name: ${ORACLE_SERVICE}
 
-    # nome do PDB padrão do Oracle XE
-    service_name: XEPDB1
-
-    # usuário criado no script init
-    username: datadog
-    password: datadog
-
-    # habilita Database Monitoring
-    dbm: true
-
-    # hostname reportado no Datadog
-    reported_hostname: oracle-xe
+    username: ${ORACLE_USER}
+    password: ${ORACLE_PASSWORD}
 
     tags:
-      - env:lab
+      - env:${ENVIRONMENT}
+      - project:${PROJECT}
       - db:oracle-xe
-      - source:docker
