@@ -1,0 +1,81 @@
+######################################
+# SISTEMA OPERACIONAL
+######################################
+
+.DS_Store
+Thumbs.db
+*.log
+
+######################################
+# DOCKER
+######################################
+
+# volumes locais
+docker-data/
+*.pid
+
+# arquivos temporários
+*.tmp
+*.temp
+
+######################################
+# DATADOG
+######################################
+
+# arquivos sensíveis
+datadog/api_key
+datadog/app_key
+datadog/*.secret
+datadog/*.key
+
+# configs locais não versionadas
+datadog-agent.yaml
+datadog.yaml.local
+
+######################################
+# ORACLE
+######################################
+
+# datafiles e volumes do Oracle
+oracle/data/
+oracle/oradata/
+*.dbf
+*.ctl
+*.log
+
+######################################
+# NODE (se usar)
+######################################
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+######################################
+# IDE
+######################################
+
+.vscode/
+.idea/
+
+######################################
+# ENV FILES
+######################################
+
+.env
+.env.local
+.env.*
+
+######################################
+# DOCKER COMPOSE OVERRIDE
+######################################
+
+docker-compose.override.yml
+
+######################################
+# CACHE
+######################################
+
+.cache/
+tmp/
