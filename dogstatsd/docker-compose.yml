@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    container_name: datadog-agent
+    environment:
+      - DD_API_KEY=${DD_API_KEY}          # defina no .env ou exporte antes de rodar
+      - DD_SITE=datadoghq.com             # altere para datadoghq.eu se usar região EU
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      - DD_LOGS_ENABLED=false
+    ports:
+      - "8125:8125/udp"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+    restart: unless-stopped
+
+  collector:
+    build: .
+    container_name: weather-collector-python
+    depends_on:
+      - datadog-agent
+    environment:
+      - DD_AGENT_HOST=datadog-agent   # usado caso queira substituir via env no futuro
+    restart: unless-stopped
