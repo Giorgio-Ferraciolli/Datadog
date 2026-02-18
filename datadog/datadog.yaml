@@ -1,0 +1,11 @@
+## Arquivo principal do Datadog Agent
+
+# habilita coleta de logs
+logs_enabled: true
+
+# habilita Database Monitoring
+database_monitoring:
+  enabled: true
+
+# hostname customizado (opcional)
+hostname: oracle-xe-datadog-agent
