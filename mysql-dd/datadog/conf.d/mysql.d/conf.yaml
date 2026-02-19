@@ -1,0 +1,19 @@
+init_config:
+
+instances:
+
+  - dbm: true
+
+    host: mysql-db
+    port: 3306
+
+    username: datadog
+    password: datadog
+
+    options:
+      replication: false
+
+    tags:
+      - env:lab
+      - db:mysql
+      - source:docker

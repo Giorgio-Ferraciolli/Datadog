@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-db
+    hostname: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:latest
+    container_name: datadog-agent
+    hostname: datadog-agent
+    depends_on:
+      - mysql
+
+    environment:
+      DD_API_KEY: ${DATADOG_API_KEY}
+      DD_SITE: ${DATADOG_SITE}
+
+      DD_DBM_ENABLED: "true"
+      DD_DATABASE_MONITORING_ENABLED: "true"
+
+      DD_LOGS_ENABLED: "true"
+      DD_PROCESS_AGENT_ENABLED: "true"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./datadog/conf.d:/etc/datadog-agent/conf.d:ro
+
+    restart: unless-stopped
+
+
+volumes:
+  mysql-data:
