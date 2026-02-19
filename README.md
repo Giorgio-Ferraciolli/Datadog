@@ -1,4 +1,4 @@
-# Datadog Studies
+# Datadog Estudos
 
 Repositório com projetos práticos de estudo e implementação do **Datadog** — plataforma de observabilidade que unifica monitoramento, métricas, logs e rastreamento de aplicações em um único lugar.
 
