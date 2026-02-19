@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Java Datadog App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #080c10;
+      --bg2:       #0d1318;
+      --bg3:       #111920;
+      --border:    #1c2a34;
+      --accent:    #00e5ff;
+      --accent2:   #7fff6e;
+      --accent3:   #ff4d6d;
+      --text:      #c8d8e0;
+      --text-dim:  #4a6272;
+      --text-bright: #eaf4f8;
+      --glow:      0 0 18px rgba(0,229,255,0.18);
+      --glow2:     0 0 18px rgba(127,255,110,0.15);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grain overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: .5;
+    }
+
+    /* ── Scanlines ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.07) 2px,
+        rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative; z-index: 10;
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+      background: linear-gradient(90deg, rgba(0,229,255,0.04) 0%, transparent 60%);
+    }
+
+    .logo {
+      display: flex; align-items: center; gap: .75rem;
+    }
+    .logo-mark {
+      width: 32px; height: 32px;
+      border: 2px solid var(--accent);
+      display: grid; place-items: center;
+      box-shadow: var(--glow);
+      animation: pulse-border 3s ease-in-out infinite;
+    }
+    @keyframes pulse-border {
+      0%,100% { box-shadow: 0 0 8px rgba(0,229,255,0.3); }
+      50%      { box-shadow: 0 0 22px rgba(0,229,255,0.6); }
+    }
+    .logo-mark span { font-family: 'Syne', sans-serif; font-weight: 800; color: var(--accent); font-size: .8rem; }
+    .logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.1rem; color: var(--text-bright); letter-spacing: .04em; }
+    .logo-text em { color: var(--accent); font-style: normal; }
+
+    .header-right { display: flex; align-items: center; gap: 1.5rem; }
+    .status-pill {
+      display: flex; align-items: center; gap: .4rem;
+      font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent2);
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--accent2);
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:.2; } }
+
+    .clock { font-size: .75rem; color: var(--text-dim); font-family: 'Space Mono', monospace; }
+
+    /* ── Layout ── */
+    main {
+      position: relative; z-index: 5;
+      max-width: 1280px; margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ── Section title ── */
+    .section-label {
+      font-size: .65rem; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 1rem;
+    }
+    .section-label::before { content: '// '; color: var(--accent); }
+
+    /* ── Stats row ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem; margin-bottom: 2rem;
+    }
+    @media(max-width:800px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 1.25rem 1.5rem;
+      position: relative; overflow: hidden;
+      transition: border-color .2s;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 3px; height: 100%;
+    }
+    .stat-card.cyan::before  { background: var(--accent); box-shadow: var(--glow); }
+    .stat-card.green::before { background: var(--accent2); box-shadow: var(--glow2); }
+    .stat-card.red::before   { background: var(--accent3); }
+    .stat-card.yellow::before{ background: #ffd166; }
+
+    .stat-card:hover { border-color: var(--accent); }
+
+    .stat-label { font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .5rem; }
+    .stat-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; color: var(--text-bright); line-height: 1; }
+    .stat-value.cyan  { color: var(--accent); }
+    .stat-value.green { color: var(--accent2); }
+    .stat-value.red   { color: var(--accent3); }
+    .stat-value.yellow{ color: #ffd166; }
+    .stat-sub { font-size: .65rem; color: var(--text-dim); margin-top: .4rem; }
+
+    /* ── Main grid ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+    }
+    @media(max-width:900px) { .content-grid { grid-template-columns: 1fr; } }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+    }
+    .panel-header {
+      padding: .75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg3);
+    }
+    .panel-title { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+    .panel-body { padding: 1.25rem; }
+
+    /* ── Product table ── */
+    .product-table { width: 100%; border-collapse: collapse; }
+    .product-table th {
+      text-align: left; font-size: .6rem; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-dim); padding: .5rem .75rem; border-bottom: 1px solid var(--border);
+    }
+    .product-table td {
+      padding: .75rem .75rem; font-size: .8rem; border-bottom: 1px solid rgba(28,42,52,.6);
+      vertical-align: middle;
+    }
+    .product-table tr:last-child td { border-bottom: none; }
+    .product-table tr { transition: background .15s; }
+    .product-table tr:hover td { background: rgba(0,229,255,0.03); }
+
+    .price-tag { color: var(--accent2); font-weight: 700; }
+    .stock-badge {
+      display: inline-block; padding: .15rem .5rem;
+      font-size: .6rem; letter-spacing: .08em; text-transform: uppercase;
+      border: 1px solid currentColor; border-radius: 0;
+    }
+    .stock-badge.ok  { color: var(--accent2); }
+    .stock-badge.low { color: #ffd166; }
+    .stock-badge.critical { color: var(--accent3); }
+
+    /* Action buttons */
+    .actions { display: flex; gap: .4rem; }
+    .btn-icon {
+      background: none; border: 1px solid var(--border); color: var(--text-dim);
+      width: 28px; height: 28px; cursor: pointer; display: grid; place-items: center;
+      font-size: .7rem; transition: all .15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-icon.del:hover { border-color: var(--accent3); color: var(--accent3); }
+
+    /* ── Form panel ── */
+    .form-group { margin-bottom: 1rem; }
+    .form-label { font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); display: block; margin-bottom: .4rem; }
+    .form-input {
+      width: 100%; background: var(--bg);
+      border: 1px solid var(--border); color: var(--text-bright);
+      padding: .55rem .75rem; font-family: 'Space Mono', monospace; font-size: .8rem;
+      outline: none; transition: border-color .15s;
+    }
+    .form-input:focus { border-color: var(--accent); box-shadow: var(--glow); }
+    .form-input::placeholder { color: var(--text-dim); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+
+    .btn-submit {
+      width: 100%; padding: .7rem; margin-top: .5rem;
+      background: transparent; border: 1px solid var(--accent);
+      color: var(--accent); font-family: 'Space Mono', monospace; font-size: .75rem;
+      letter-spacing: .12em; text-transform: uppercase; cursor: pointer;
+      transition: all .2s; position: relative; overflow: hidden;
+    }
+    .btn-submit::before {
+      content: ''; position: absolute; inset: 0;
+      background: var(--accent); transform: scaleX(0); transform-origin: left;
+      transition: transform .2s; z-index: 0;
+    }
+    .btn-submit:hover::before { transform: scaleX(1); }
+    .btn-submit span { position: relative; z-index: 1; }
+    .btn-submit:hover span { color: var(--bg); }
+    .btn-submit:hover { box-shadow: var(--glow); }
+
+    /* ── Log feed ── */
+    .log-feed {
+      font-size: .72rem; line-height: 1.7;
+      max-height: 180px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .log-entry { display: flex; gap: .75rem; padding: .1rem 0; }
+    .log-time { color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+    .log-msg.info   { color: var(--accent); }
+    .log-msg.success{ color: var(--accent2); }
+    .log-msg.warn   { color: #ffd166; }
+    .log-msg.error  { color: var(--accent3); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      background: var(--bg2); border: 1px solid var(--accent);
+      color: var(--accent); padding: .75rem 1.25rem;
+      font-size: .75rem; letter-spacing: .08em;
+      box-shadow: var(--glow); z-index: 999;
+      transform: translateY(120%); transition: transform .3s ease;
+      max-width: 320px;
+    }
+    #toast.show { transform: translateY(0); }
+    #toast.error { border-color: var(--accent3); color: var(--accent3); box-shadow: 0 0 18px rgba(255,77,109,.2); }
+
+    /* ── Loading skeleton ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      height: .9rem; border-radius: 0; margin: .4rem 0;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-dim); font-size: .8rem; }
+    .empty-icon { font-size: 2rem; margin-bottom: .75rem; opacity: .3; }
+
+    /* ── Animated entry ── */
+    .fade-in { animation: fadeIn .4s ease forwards; opacity: 0; }
+    @keyframes fadeIn { to { opacity: 1; } }
+
+    /* ── Product name truncate ── */
+    .prod-name { font-weight: 700; color: var(--text-bright); }
+    .prod-desc { font-size: .7rem; color: var(--text-dim); margin-top: .15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"><span>DD</span></div>
+    <div class="logo-text">java<em>.</em>datadog</div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill"><div class="dot"></div> API online</div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stats -->
+  <div class="section-label">métricas em tempo real</div>
+  <div class="stats-grid">
+    <div class="stat-card cyan">
+      <div class="stat-label">Total de Produtos</div>
+      <div class="stat-value cyan" id="stat-total">—</div>
+      <div class="stat-sub">no catálogo</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Criados (sessão)</div>
+      <div class="stat-value green" id="stat-created">0</div>
+      <div class="stat-sub">desde que abriu</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Deletados (sessão)</div>
+      <div class="stat-value red" id="stat-deleted">0</div>
+      <div class="stat-sub">desde que abriu</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-label">Estoque Total</div>
+      <div class="stat-value yellow" id="stat-stock">—</div>
+      <div class="stat-sub">unidades somadas</div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content-grid">
+
+    <!-- Products panel -->
+    <div>
+      <div class="section-label">catálogo de produtos</div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">product list</span>
+          <span class="clock" id="last-refresh">atualizando...</span>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Produto</th>
+                <th>Preço</th>
+                <th>Estoque</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="product-tbody">
+              <tr><td colspan="5"><div class="skeleton"></div><div class="skeleton" style="width:70%"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Log feed -->
+      <div style="margin-top:1.5rem">
+        <div class="section-label">activity log</div>
+        <div class="panel">
+          <div class="panel-body" style="padding:.75rem 1.25rem">
+            <div class="log-feed" id="log-feed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div>
+      <div class="section-label">novo produto</div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">create product</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="form-label">Nome</label>
+            <input class="form-input" id="f-name" type="text" placeholder="ex: Headset Pro"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <input class="form-input" id="f-desc" type="text" placeholder="ex: Som 7.1 surround"/>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Preço (R$)</label>
+              <input class="form-input" id="f-price" type="number" step="0.01" placeholder="0.00"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estoque</label>
+              <input class="form-input" id="f-stock" type="number" placeholder="0"/>
+            </div>
+          </div>
+          <button class="btn-submit" onclick="createProduct()"><span>▶ criar produto</span></button>
+        </div>
+      </div>
+
+      <!-- Info card -->
+      <div style="margin-top:1.5rem">
+        <div class="section-label">app info</div>
+        <div class="panel">
+          <div class="panel-body">
+            <div id="app-info" style="font-size:.75rem; line-height:2; color:var(--text-dim)">
+              <div class="skeleton"></div>
+              <div class="skeleton" style="width:60%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // Nginx faz proxy de /api/ para o container java-app:8080
+  const API = '';
+  let sessionCreated = 0;
+  let sessionDeleted = 0;
+
+  // ── Clock ──
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR');
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── Log ──
+  function addLog(msg, type = 'info') {
+    const feed = document.getElementById('log-feed');
+    const now = new Date().toLocaleTimeString('pt-BR');
+    const el = document.createElement('div');
+    el.className = 'log-entry fade-in';
+    el.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+    feed.prepend(el);
+    while (feed.children.length > 40) feed.removeChild(feed.lastChild);
+  }
+
+  // ── Toast ──
+  let toastTimer;
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show' + (isError ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = '', 3000);
+  }
+
+  // ── Fetch products ──
+  async function loadProducts() {
+    try {
+      const res = await fetch(`${API}/api/products`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const products = await res.json();
+      renderProducts(products);
+      updateStats(products);
+      document.getElementById('last-refresh').textContent =
+        'atualizado ' + new Date().toLocaleTimeString('pt-BR');
+    } catch(e) {
+      document.getElementById('product-tbody').innerHTML =
+        `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--accent3);font-size:.75rem">⚠ Não foi possível conectar à API — verifique se o Docker está rodando</td></tr>`;
+      addLog('Falha ao carregar produtos: ' + e.message, 'error');
+    }
+  }
+
+  function renderProducts(products) {
+    const tbody = document.getElementById('product-tbody');
+    if (!products.length) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">◻</div>Nenhum produto cadastrado</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = products.map(p => {
+      const stockClass = p.stock > 15 ? 'ok' : p.stock > 5 ? 'low' : 'critical';
+      const stockLabel = p.stock > 15 ? 'ok' : p.stock > 5 ? 'baixo' : 'crítico';
+      return `
+      <tr class="fade-in">
+        <td style="color:var(--text-dim);font-size:.7rem">#${p.id}</td>
+        <td>
+          <div class="prod-name">${escape(p.name)}</div>
+          <div class="prod-desc">${escape(p.description || '')}</div>
+        </td>
+        <td class="price-tag">R$ ${Number(p.price).toFixed(2)}</td>
+        <td>
+          <span class="stock-badge ${stockClass}">${p.stock} · ${stockLabel}</span>
+        </td>
+        <td>
+          <div class="actions">
+            <button class="btn-icon del" onclick="deleteProduct(${p.id}, '${escape(p.name)}')" title="Deletar">✕</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function updateStats(products) {
+    document.getElementById('stat-total').textContent = products.length;
+    document.getElementById('stat-created').textContent = sessionCreated;
+    document.getElementById('stat-deleted').textContent = sessionDeleted;
+    const totalStock = products.reduce((s, p) => s + (p.stock || 0), 0);
+    document.getElementById('stat-stock').textContent = totalStock;
+  }
+
+  function escape(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Create ──
+  async function createProduct() {
+    const name  = document.getElementById('f-name').value.trim();
+    const desc  = document.getElementById('f-desc').value.trim();
+    const price = parseFloat(document.getElementById('f-price').value);
+    const stock = parseInt(document.getElementById('f-stock').value);
+
+    if (!name || isNaN(price) || isNaN(stock)) {
+      showToast('Preencha todos os campos corretamente', true);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API}/api/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc, price, stock })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const p = await res.json();
+      sessionCreated++;
+      addLog(`Produto criado → #${p.id} "${p.name}"`, 'success');
+      showToast(`✓ "${p.name}" criado com sucesso`);
+      ['f-name','f-desc','f-price','f-stock'].forEach(id => document.getElementById(id).value = '');
+      loadProducts();
+    } catch(e) {
+      addLog('Erro ao criar produto: ' + e.message, 'error');
+      showToast('Erro ao criar produto', true);
+    }
+  }
+
+  // ── Delete ──
+  async function deleteProduct(id, name) {
+    if (!confirm(`Deletar "${name}"?`)) return;
+    try {
+      const res = await fetch(`${API}/api/products/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      sessionDeleted++;
+      addLog(`Produto deletado → #${id} "${name}"`, 'warn');
+      showToast(`"${name}" removido`);
+      loadProducts();
+    } catch(e) {
+      addLog('Erro ao deletar: ' + e.message, 'error');
+      showToast('Erro ao deletar produto', true);
+    }
+  }
+
+  // ── App info ──
+  async function loadInfo() {
+    try {
+      const res = await fetch(`${API}/api/info`);
+      const data = await res.json();
+      document.getElementById('app-info').innerHTML = `
+        <div style="display:grid;gap:.3rem">
+          ${Object.entries(data).map(([k,v]) =>
+            `<div style="display:flex;justify-content:space-between">
+               <span style="color:var(--text-dim)">${k}</span>
+               <span style="color:var(--accent);font-size:.72rem">${v}</span>
+             </div>`
+          ).join('')}
+        </div>`;
+    } catch(e) {
+      document.getElementById('app-info').innerHTML = `<span style="color:var(--accent3);font-size:.72rem">API indisponível</span>`;
+    }
+  }
+
+  // ── Init ──
+  addLog('Frontend iniciado — conectando à API...', 'info');
+  loadProducts();
+  loadInfo();
+  setInterval(loadProducts, 10000); // auto-refresh 10s
+</script>
+</body>
+</html>
