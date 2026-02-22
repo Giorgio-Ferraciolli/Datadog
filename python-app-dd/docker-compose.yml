@@ -1,0 +1,104 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Variáveis obrigatórias — defina no arquivo .env na raiz do projeto:
+#   DATADOG_API_KEY=<sua-api-key>
+#   DATADOG_SITE=datadoghq.com        # ou datadoghq.eu, us3.datadoghq.com etc.
+#   DD_SERVICE=fastapi-datadog
+#   DD_ENV=development
+#   DD_VERSION=1.0.0
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Datadog Agent ────────────────────────────────────────────────────────────
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    container_name: datadog-agent
+    restart: unless-stopped
+    environment:
+      # Autenticação
+      - DD_API_KEY=${DATADOG_API_KEY}
+      - DD_SITE=${DATADOG_SITE:-datadoghq.com}
+
+      # APM (traces)
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true   # aceita traces de outros containers
+
+      # DogStatsD (métricas customizadas)
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+
+      # Logs
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+
+      # Process monitoring
+      - DD_PROCESS_AGENT_ENABLED=true
+
+      # Reduz ruído em ambiente de dev
+      - DD_AC_EXCLUDE=name:datadog-agent
+
+    volumes:
+      # Acesso ao socket do Docker para coletar logs de containers
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Acesso ao proc para métricas de host
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      # Pasta de configurações extras (opcional)
+      - ./datadog/conf.d:/etc/datadog-agent/conf.d:ro
+
+    ports:
+      - "8125:8125/udp"   # DogStatsD
+      - "8126:8126/tcp"   # APM / traces
+
+    healthcheck:
+      test: ["CMD", "agent", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Backend FastAPI ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fastapi-backend
+    restart: unless-stopped
+    depends_on:
+      datadog-agent:
+        condition: service_healthy
+    environment:
+      # ── Datadog SDK ────────────────────────────────────────────────────────
+      - DD_SERVICE=${DD_SERVICE:-fastapi-datadog}
+      - DD_ENV=${DD_ENV:-development}
+      - DD_VERSION=${DD_VERSION:-1.0.0}
+
+      # Endereço do Agent (nome do serviço no Compose)
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_DOGSTATSD_PORT=8125
+
+      # Ativa correlação de logs com traces automaticamente
+      - DD_LOGS_INJECTION=true
+
+      # Propaga trace-context entre serviços (W3C + Datadog)
+      - DD_TRACE_PROPAGATION_STYLE=tracecontext,datadog
+
+      # Ativa profiling contínuo (opcional — remova para reduzir overhead)
+      - DD_PROFILING_ENABLED=false
+
+      # Runtime metrics (goroutines, GC, heap…)
+      - DD_RUNTIME_METRICS_ENABLED=true
+
+    labels:
+      # Instrui o Datadog Agent a coletar logs deste container
+      com.datadoghq.ad.logs: '[{"source": "python", "service": "${DD_SERVICE:-fastapi-datadog}"}]'
+
+    ports:
+      - "8000:8000"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
