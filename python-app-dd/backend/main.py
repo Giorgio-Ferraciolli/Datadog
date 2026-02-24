@@ -1,3 +1,4 @@
+import threading
 import logging
 import os
 import time
@@ -14,6 +15,11 @@ from fastapi.responses import JSONResponse
 # ── ddtrace auto-instrumentation ──────────────────────────────────────────────
 patch_all()
 
+# ── Configurações de ambiente ────────────────────────────────────────────────
+DD_ENV = os.getenv("DD_ENV", "local")
+DD_SERVICE = os.getenv("DD_SERVICE", "fastapi-datadog")
+DD_VERSION = os.getenv("DD_VERSION", "1.0.0")
+
 # ── Datadog StatsD (métricas customizadas) ────────────────────────────────────
 initialize(
     statsd_host=os.getenv("DD_AGENT_HOST", "datadog-agent"),
@@ -23,16 +29,85 @@ initialize(
 # ── Logging estruturado (JSON) ────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "dd.trace_id": "%(dd.trace_id)s", "dd.span_id": "%(dd.span_id)s"}',
+    format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", '
+           '"message": "%(message)s", "dd.trace_id": "%(dd.trace_id)s", '
+           '"dd.span_id": "%(dd.span_id)s"}',
 )
 logger = logging.getLogger("fastapi.app")
+
+# ── Worker de métricas periódicas ─────────────────────────────────────────────
+_worker_started = False
+
+
+def metrics_worker():
+    """
+    Envia métricas para o Datadog a cada 15 segundos.
+    Funciona como heartbeat contínuo da aplicação.
+    """
+    logger.info("Metrics worker iniciado")
+
+    start_time = time.time()
+
+    while True:
+        try:
+            uptime_seconds = int(time.time() - start_time)
+
+            base_tags = [
+                f"env:{DD_ENV}",
+                f"service:{DD_SERVICE}",
+                f"version:{DD_VERSION}",
+            ]
+
+            # Gauge: valor atual aleatório
+            statsd.gauge(
+                "app.worker.random_value",
+                random.uniform(0, 100),
+                tags=base_tags,
+            )
+
+            # Counter: heartbeat contínuo
+            statsd.increment(
+                "app.worker.heartbeat",
+                tags=base_tags,
+            )
+
+            # Histogram: duração simulada
+            statsd.histogram(
+                "app.worker.fake_duration_ms",
+                random.uniform(10, 500),
+                tags=base_tags,
+            )
+
+            # Gauge: uptime do worker
+            statsd.gauge(
+                "app.worker.uptime_seconds",
+                uptime_seconds,
+                tags=base_tags,
+            )
+
+            logger.info(f"Metrics enviadas com sucesso | uptime={uptime_seconds}s")
+
+        except Exception as e:
+            logger.error(f"Erro enviando métricas periódicas: {e}")
+
+        time.sleep(15)
+
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="FastAPI + Datadog Demo",
     description="Aplicação de demonstração com traces, logs e métricas no Datadog.",
-    version=os.getenv("DD_VERSION", "1.0.0"),
+    version=DD_VERSION,
 )
+
+
+@app.on_event("startup")
+def start_metrics_worker():
+    global _worker_started
+    if not _worker_started:
+        thread = threading.Thread(target=metrics_worker, daemon=True)
+        thread.start()
+        _worker_started = True
 
 
 # ── Middleware: loga todas as requisições ─────────────────────────────────────
@@ -47,7 +122,6 @@ async def log_requests(request: Request, call_next):
         f"status={response.status_code} duration_ms={duration_ms}"
     )
 
-    # métrica de latência por endpoint
     statsd.histogram(
         "app.request.duration_ms",
         duration_ms,
@@ -55,8 +129,9 @@ async def log_requests(request: Request, call_next):
             f"endpoint:{request.url.path}",
             f"method:{request.method}",
             f"status:{response.status_code}",
-            f"env:{os.getenv('DD_ENV', 'local')}",
-            f"service:{os.getenv('DD_SERVICE', 'fastapi-datadog')}",
+            f"env:{DD_ENV}",
+            f"service:{DD_SERVICE}",
+            f"version:{DD_VERSION}",
         ],
     )
     return response
@@ -65,45 +140,41 @@ async def log_requests(request: Request, call_next):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 @app.get("/health", tags=["Observability"])
 async def health():
-    """Verifica se a aplicação está no ar."""
     logger.info("Health check solicitado")
     return {
         "status": "ok",
-        "service": os.getenv("DD_SERVICE", "fastapi-datadog"),
-        "env": os.getenv("DD_ENV", "local"),
-        "version": os.getenv("DD_VERSION", "1.0.0"),
+        "service": DD_SERVICE,
+        "env": DD_ENV,
+        "version": DD_VERSION,
         "timestamp": datetime.utcnow().isoformat(),
     }
 
 
 @app.get("/test", tags=["Observability"])
 async def test():
-    """
-    Gera um trace ativo, log estruturado e métricas customizadas no Datadog.
-    """
-    with tracer.trace("app.test.operation", service=os.getenv("DD_SERVICE", "fastapi-datadog"), resource="GET /test") as span:
+    with tracer.trace(
+        "app.test.operation",
+        service=DD_SERVICE,
+        resource="GET /test"
+    ) as span:
 
-        # ── simula latência aleatória ──────────────────────────────────────
         latency = random.uniform(0.01, 0.15)
         time.sleep(latency)
 
-        # ── enriquece o span com metadados ────────────────────────────────
         span.set_tag("custom.latency_ms", round(latency * 1000, 2))
-        span.set_tag("custom.environment", os.getenv("DD_ENV", "local"))
+        span.set_tag("custom.environment", DD_ENV)
         span.set_tag("custom.random_value", random.randint(1, 100))
 
-        # ── log estruturado (trace_id / span_id injetados pelo ddtrace) ───
         logger.info(
             "Endpoint /test processado | "
             f"latency_ms={round(latency * 1000, 2)} "
             f"trace_id={span.trace_id} span_id={span.span_id}"
         )
 
-        # ── métricas customizadas via StatsD ──────────────────────────────
         tags = [
-            f"env:{os.getenv('DD_ENV', 'local')}",
-            f"service:{os.getenv('DD_SERVICE', 'fastapi-datadog')}",
-            f"version:{os.getenv('DD_VERSION', '1.0.0')}",
+            f"env:{DD_ENV}",
+            f"service:{DD_SERVICE}",
+            f"version:{DD_VERSION}",
         ]
 
         statsd.increment("app.test.requests_total", tags=tags)
