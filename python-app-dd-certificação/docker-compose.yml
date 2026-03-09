@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+
+  datadog:
+    image: datadog/agent:latest
+    container_name: datadog-agent
+    environment:
+      - DD_API_KEY=your_datadog_api_key
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_SITE=datadoghq.com
+      - DD_APM_ENABLED=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+    ports:
+      - "8125:8125/udp"
+      - "8126:8126"
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+    - ddnet
+
+  app:
+    container_name: app-1
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DD_AGENT_HOST=datadog
+      - DD_SERVICE=app-service
+      - DD_ENV=development
+      - DD_LOGS_INJECTION=true
+    depends_on:
+      - datadog
+    networks:
+      - ddnet
+
+networks:
+  ddnet:
+    driver: bridge

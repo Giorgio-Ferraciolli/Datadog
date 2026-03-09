@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Respostas HTTP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #0056b3;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #response-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #e9ecef;
+            color: #333;
+            min-height: 50px;
+            text-align: left;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Simulador de Respostas HTTP</h1>
+        <p>Clique nos botões abaixo para simular diferentes respostas HTTP da API.</p>
+        <div>
+            <button onclick="callEndpoint('/success')">Simular sucesso (200)</button>
+            <button onclick="callEndpoint('/not-found')">Simular erro 404</button>
+            <button onclick="callEndpoint('/server-error')">Simular erro 500</button>
+        </div>
+        <div id="response-message">Aguardando simulação...</div>
+    </div>
+
+    <script>
+        async function callEndpoint(endpoint) {
+            const responseMessageDiv = document.getElementById('response-message');
+            responseMessageDiv.className = ''; // Limpa classes anteriores
+            responseMessageDiv.textContent = 'Carregando...';
+
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+
+                let message = `Status: ${response.status}\n`;
+                message += `Mensagem: ${data.message || data.detail || 'Nenhuma mensagem adicional'}\n`;
+                message += `Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}`;
+
+                responseMessageDiv.textContent = message;
+
+                if (response.status >= 200 && response.status < 300) {
+                    responseMessageDiv.classList.add('success');
+                } else if (response.status >= 400 && response.status < 500) {
+                    responseMessageDiv.classList.add('warning');
+                } else if (response.status >= 500) {
+                    responseMessageDiv.classList.add('error');
+                }
+
+            } catch (error) {
+                console.error('Erro ao chamar o endpoint:', error);
+                responseMessageDiv.textContent = `Erro ao conectar ou processar a resposta: ${error.message}`;
+                responseMessageDiv.classList.add('error');
+            }
+        }
+    </script>
+</body>
+</html>

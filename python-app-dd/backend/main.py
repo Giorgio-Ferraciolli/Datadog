@@ -10,7 +10,6 @@ from datadog import initialize, statsd
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 
 # ── ddtrace auto-instrumentation ──────────────────────────────────────────────
 patch_all()
@@ -20,13 +19,13 @@ DD_ENV = os.getenv("DD_ENV", "local")
 DD_SERVICE = os.getenv("DD_SERVICE", "fastapi-datadog")
 DD_VERSION = os.getenv("DD_VERSION", "1.0.0")
 
-# ── Datadog StatsD (métricas customizadas) ────────────────────────────────────
+# ── Datadog StatsD ────────────────────────────────────────────────────────────
 initialize(
     statsd_host=os.getenv("DD_AGENT_HOST", "datadog-agent"),
     statsd_port=int(os.getenv("DD_DOGSTATSD_PORT", 8125)),
 )
 
-# ── Logging estruturado (JSON) ────────────────────────────────────────────────
+# ── Logging estruturado ───────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", '
@@ -35,60 +34,105 @@ logging.basicConfig(
 )
 logger = logging.getLogger("fastapi.app")
 
+# ── Controle de workers ───────────────────────────────────────────────────────
+_workers_started = False
+
+
+# ── Lógica reutilizável do /test ──────────────────────────────────────────────
+def run_test_operation(source="http"):
+    with tracer.trace(
+        "app.test.operation",
+        service=DD_SERVICE,
+        resource=f"{source} /test"
+    ) as span:
+
+        latency = random.uniform(0.01, 0.15)
+        time.sleep(latency)
+
+        latency_ms = round(latency * 1000, 2)
+        random_value = random.randint(1, 100)
+
+        span.set_tag("custom.latency_ms", latency_ms)
+        span.set_tag("custom.environment", DD_ENV)
+        span.set_tag("custom.execution_source", source)
+        span.set_tag("custom.random_value", random_value)
+
+        tags = [
+            f"env:{DD_ENV}",
+            f"service:{DD_SERVICE}",
+            f"version:{DD_VERSION}",
+            f"source:{source}",
+        ]
+
+        statsd.increment("app.test.requests_total", tags=tags)
+        statsd.histogram("app.test.simulated_latency_ms", latency_ms, tags=tags)
+        statsd.gauge("app.test.random_value", random_value, tags=tags)
+
+        logger.info(
+            f"/test executado | source={source} latency_ms={latency_ms} trace_id={span.trace_id}"
+        )
+
+        return span.trace_id, span.span_id, latency_ms
+
+
 # ── Worker de métricas periódicas ─────────────────────────────────────────────
-_worker_started = False
-
-
 def metrics_worker():
-    """
-    Envia métricas para o Datadog a cada 15 segundos.
-    Funciona como heartbeat contínuo da aplicação.
-    """
-    logger.info("Metrics worker iniciado")
 
+    logger.info("Metrics worker iniciado")
     start_time = time.time()
 
     while True:
         try:
             uptime_seconds = int(time.time() - start_time)
 
-            base_tags = [
+            tags = [
                 f"env:{DD_ENV}",
                 f"service:{DD_SERVICE}",
                 f"version:{DD_VERSION}",
             ]
 
-            # Gauge: valor atual aleatório
             statsd.gauge(
                 "app.worker.random_value",
                 random.uniform(0, 100),
-                tags=base_tags,
+                tags=tags,
             )
 
-            # Counter: heartbeat contínuo
             statsd.increment(
                 "app.worker.heartbeat",
-                tags=base_tags,
+                tags=tags,
             )
 
-            # Histogram: duração simulada
             statsd.histogram(
                 "app.worker.fake_duration_ms",
                 random.uniform(10, 500),
-                tags=base_tags,
+                tags=tags,
             )
 
-            # Gauge: uptime do worker
             statsd.gauge(
                 "app.worker.uptime_seconds",
                 uptime_seconds,
-                tags=base_tags,
+                tags=tags,
             )
 
-            logger.info(f"Metrics enviadas com sucesso | uptime={uptime_seconds}s")
+            logger.info(f"Metrics worker enviado | uptime={uptime_seconds}s")
 
         except Exception as e:
-            logger.error(f"Erro enviando métricas periódicas: {e}")
+            logger.error(f"Erro no metrics worker: {e}")
+
+        time.sleep(15)
+
+
+
+def test_worker():
+
+    logger.info("Test worker iniciado")
+
+    while True:
+        try:
+            run_test_operation(source="worker")
+
+        except Exception as e:
+            logger.error(f"Erro no test worker: {e}")
 
         time.sleep(15)
 
@@ -96,23 +140,37 @@ def metrics_worker():
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="FastAPI + Datadog Demo",
-    description="Aplicação de demonstração com traces, logs e métricas no Datadog.",
+    description="Aplicação com APM, métricas e logs automáticos",
     version=DD_VERSION,
 )
 
 
 @app.on_event("startup")
-def start_metrics_worker():
-    global _worker_started
-    if not _worker_started:
-        thread = threading.Thread(target=metrics_worker, daemon=True)
-        thread.start()
-        _worker_started = True
+def start_workers():
+
+    global _workers_started
+
+    if not _workers_started:
+
+        threading.Thread(
+            target=metrics_worker,
+            daemon=True
+        ).start()
+
+        threading.Thread(
+            target=test_worker,
+            daemon=True
+        ).start()
+
+        _workers_started = True
+
+        logger.info("Workers iniciados com sucesso")
 
 
-# ── Middleware: loga todas as requisições ─────────────────────────────────────
+# ── Middleware ────────────────────────────────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -131,16 +189,18 @@ async def log_requests(request: Request, call_next):
             f"status:{response.status_code}",
             f"env:{DD_ENV}",
             f"service:{DD_SERVICE}",
-            f"version:{DD_VERSION}",
         ],
     )
+
     return response
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-@app.get("/health", tags=["Observability"])
+@app.get("/health")
 async def health():
+
     logger.info("Health check solicitado")
+
     return {
         "status": "ok",
         "service": DD_SERVICE,
@@ -150,47 +210,27 @@ async def health():
     }
 
 
-@app.get("/test", tags=["Observability"])
+@app.get("/test")
 async def test():
-    with tracer.trace(
-        "app.test.operation",
-        service=DD_SERVICE,
-        resource="GET /test"
-    ) as span:
 
-        latency = random.uniform(0.01, 0.15)
-        time.sleep(latency)
+    trace_id, span_id, latency_ms = run_test_operation(source="http")
 
-        span.set_tag("custom.latency_ms", round(latency * 1000, 2))
-        span.set_tag("custom.environment", DD_ENV)
-        span.set_tag("custom.random_value", random.randint(1, 100))
-
-        logger.info(
-            "Endpoint /test processado | "
-            f"latency_ms={round(latency * 1000, 2)} "
-            f"trace_id={span.trace_id} span_id={span.span_id}"
-        )
-
-        tags = [
-            f"env:{DD_ENV}",
-            f"service:{DD_SERVICE}",
-            f"version:{DD_VERSION}",
-        ]
-
-        statsd.increment("app.test.requests_total", tags=tags)
-        statsd.histogram("app.test.simulated_latency_ms", round(latency * 1000, 2), tags=tags)
-        statsd.gauge("app.test.random_value", random.randint(1, 100), tags=tags)
-
-        return {
-            "status": "ok",
-            "message": "Trace, log e métricas enviados ao Datadog com sucesso!",
-            "trace_id": str(span.trace_id),
-            "span_id": str(span.span_id),
-            "simulated_latency_ms": round(latency * 1000, 2),
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+    return {
+        "status": "ok",
+        "message": "Executado com sucesso",
+        "trace_id": str(trace_id),
+        "span_id": str(span_id),
+        "latency_ms": latency_ms,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )
