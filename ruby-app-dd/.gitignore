@@ -1,0 +1,5 @@
+.env
+Gemfile.lock
+tmp/
+log/
+.DS_Store

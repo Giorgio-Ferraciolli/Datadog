@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Biblioteca Pessoal</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="brand">
+        <span class="brand-icon">📚</span>
+        <span class="brand-name">Biblioteca Pessoal</span>
+      </a>
+      <nav class="main-nav">
+        <a href="/">Livros</a>
+        <a href="/stats">Estatísticas</a>
+        <a href="/books/new" class="btn btn-primary btn-sm">+ Novo livro</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <%= yield %>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>Biblioteca Pessoal · feita com Sinatra + Sequel + OpenTelemetry</span>
+    </div>
+  </footer>
+</body>
+</html>

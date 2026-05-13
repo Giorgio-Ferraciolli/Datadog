@@ -1,0 +1,77 @@
+<a href="/" class="back-link">← Voltar</a>
+
+<article class="book-detail">
+  <header class="book-detail-head">
+    <span class="status-badge status-<%= book.status %>"><%= book.status_label %></span>
+    <h1><%= h(book.title) %></h1>
+    <p class="book-detail-author">por <%= h(book.author) %></p>
+    <% if book.genre && !book.genre.empty? %>
+      <p class="book-detail-meta"><%= h(book.genre) %><% if book.total_pages %> · <%= book.total_pages %> páginas<% end %></p>
+    <% end %>
+  </header>
+
+  <% if book.total_pages %>
+    <div class="progress progress-lg">
+      <div class="progress-bar" style="width: <%= book.progress_pct %>%"></div>
+    </div>
+    <p class="progress-text">
+      <strong><%= pages_read %></strong> de <%= book.total_pages %> páginas (<%= book.progress_pct %>%)
+    </p>
+  <% else %>
+    <p class="progress-text"><strong><%= pages_read %></strong> páginas lidas</p>
+  <% end %>
+
+  <% if book.notes && !book.notes.empty? %>
+    <section class="notes-block">
+      <h3>Notas</h3>
+      <p><%= h(book.notes) %></p>
+    </section>
+  <% end %>
+
+  <section class="session-form-block">
+    <h2>Registrar sessão de leitura</h2>
+    <form action="/books/<%= book.id %>/sessions" method="post" class="session-form">
+      <div class="form-row">
+        <div class="form-field">
+          <label for="pages">Páginas lidas</label>
+          <input type="number" id="pages" name="pages" min="1" required>
+        </div>
+        <div class="form-field">
+          <label for="read_on">Data</label>
+          <input type="date" id="read_on" name="read_on" value="<%= Date.today.strftime('%Y-%m-%d') %>">
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="comment">Comentário (opcional)</label>
+        <input type="text" id="comment" name="comment" placeholder="Algo que marcou nessa sessão...">
+      </div>
+      <button type="submit" class="btn btn-primary">Registrar</button>
+    </form>
+  </section>
+
+  <section class="sessions-list">
+    <h2>Histórico de leitura</h2>
+    <% if sessions.empty? %>
+      <p class="muted">Nenhuma sessão registrada ainda.</p>
+    <% else %>
+      <ul class="timeline">
+        <% sessions.each do |s| %>
+          <li class="timeline-item">
+            <div class="timeline-date"><%= fmt_date(s.read_on) %></div>
+            <div class="timeline-content">
+              <strong><%= s.pages %> páginas</strong>
+              <% if s.comment && !s.comment.empty? %>
+                <p class="timeline-comment"><%= h(s.comment) %></p>
+              <% end %>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+
+  <form action="/books/<%= book.id %>/delete" method="post" class="delete-form"
+        onsubmit="return confirm('Remover este livro e todas as sessões?');">
+    <button type="submit" class="btn btn-danger">Excluir livro</button>
+  </form>
+</article>

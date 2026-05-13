@@ -1,0 +1,49 @@
+<section class="page-head">
+  <h1>Minha estante</h1>
+  <p class="subtitle">Acompanhe o que você está lendo, o que já leu e o que vem por aí.</p>
+</section>
+
+<div class="filters">
+  <a href="/" class="chip <%= active.nil? ? 'is-active' : '' %>">
+    Todos <span class="chip-count"><%= counters[:all] %></span>
+  </a>
+  <a href="/?status=to_read" class="chip <%= active == 'to_read' ? 'is-active' : '' %>">
+    A ler <span class="chip-count"><%= counters[:to_read] %></span>
+  </a>
+  <a href="/?status=reading" class="chip <%= active == 'reading' ? 'is-active' : '' %>">
+    Lendo <span class="chip-count"><%= counters[:reading] %></span>
+  </a>
+  <a href="/?status=finished" class="chip <%= active == 'finished' ? 'is-active' : '' %>">
+    Finalizados <span class="chip-count"><%= counters[:finished] %></span>
+  </a>
+</div>
+
+<% if books.empty? %>
+  <div class="empty-state">
+    <p>Nenhum livro por aqui ainda.</p>
+    <a href="/books/new" class="btn btn-primary">Adicionar o primeiro</a>
+  </div>
+<% else %>
+  <div class="book-grid">
+    <% books.each do |book| %>
+      <a href="/books/<%= book.id %>" class="book-card">
+        <div class="book-card-head">
+          <span class="status-badge status-<%= book.status %>"><%= book.status_label %></span>
+        </div>
+        <h3 class="book-title"><%= h(book.title) %></h3>
+        <p class="book-author"><%= h(book.author) %></p>
+        <% if book.total_pages %>
+          <div class="progress">
+            <div class="progress-bar" style="width: <%= book.progress_pct %>%"></div>
+          </div>
+          <p class="progress-text">
+            <%= book.pages_read %> / <%= book.total_pages %> páginas
+          </p>
+        <% end %>
+        <% if book.genre && !book.genre.empty? %>
+          <p class="book-genre"><%= h(book.genre) %></p>
+        <% end %>
+      </a>
+    <% end %>
+  </div>
+<% end %>

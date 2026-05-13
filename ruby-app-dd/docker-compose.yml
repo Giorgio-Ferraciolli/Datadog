@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: biblioteca
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  datadog:
+    image: gcr.io/datadoghq/agent:7
+    environment:
+      DD_API_KEY: ${DD_API_KEY:?Set DD_API_KEY in .env}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      DD_HOSTNAME: biblioteca-host
+      DD_APM_ENABLED: "true"
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+      DD_CONTAINER_EXCLUDE: "name:datadog"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+    ports:
+      - "18126:8126"   # APM traces
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "agent", "service": "datadog-agent"}]'
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      datadog:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/biblioteca
+      RACK_ENV: development
+      # ---- Datadog ----
+      DD_AGENT_HOST: datadog
+      DD_TRACE_AGENT_PORT: "8126"
+      DD_SERVICE: biblioteca-pessoal
+      DD_ENV: development
+      DD_VERSION: "1.0.0"
+      DD_TRACE_DEBUG: "false"           # liga pra true se traces não aparecerem
+      DD_LOGS_INJECTION: "true"
+      DD_REMOTE_CONFIGURATION_ENABLED: "false"
+    ports:
+      - "4567:4567"
+    volumes:
+      - .:/app
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "ruby", "service": "biblioteca-pessoal"}]'
+      com.datadoghq.tags.env: "development"
+      com.datadoghq.tags.service: "biblioteca-pessoal"
+      com.datadoghq.tags.version: "1.0.0"
+
+volumes:
+  pgdata:

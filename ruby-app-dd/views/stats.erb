@@ -1,0 +1,63 @@
+<a href="/" class="back-link">← Voltar</a>
+
+<section class="page-head">
+  <h1>Estatísticas</h1>
+  <p class="subtitle">Resumo do seu hábito de leitura.</p>
+</section>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value"><%= totals[:books] %></div>
+    <div class="stat-label">Livros no total</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= totals[:finished] %></div>
+    <div class="stat-label">Finalizados</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= totals[:reading] %></div>
+    <div class="stat-label">Em andamento</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= totals[:to_read] %></div>
+    <div class="stat-label">A ler</div>
+  </div>
+  <div class="stat-card stat-card-wide">
+    <div class="stat-value"><%= totals[:pages] %></div>
+    <div class="stat-label">Páginas lidas em <%= totals[:sessions] %> sessões</div>
+  </div>
+</div>
+
+<section class="stats-section">
+  <h2>Últimos 7 dias</h2>
+  <% max = last_7_days.values.max || 1 %>
+  <% if last_7_days.empty? %>
+    <p class="muted">Nenhuma sessão nos últimos dias.</p>
+  <% else %>
+    <div class="bar-chart">
+      <% (0..6).map { |i| Date.today - 6 + i }.each do |day| %>
+        <% pages = last_7_days[day] || 0 %>
+        <% h_pct = max.zero? ? 0 : (pages.to_f / max * 100).round %>
+        <div class="bar-col">
+          <div class="bar-value"><%= pages %></div>
+          <div class="bar" style="height: <%= h_pct %>%"></div>
+          <div class="bar-label"><%= day.strftime('%a').downcase[0,3] %></div>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</section>
+
+<% unless by_genre.empty? %>
+  <section class="stats-section">
+    <h2>Por gênero</h2>
+    <ul class="genre-list">
+      <% by_genre.each do |genre, count| %>
+        <li>
+          <span><%= h(genre) %></span>
+          <span class="genre-count"><%= count %></span>
+        </li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
