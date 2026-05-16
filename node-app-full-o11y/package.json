@@ -1,0 +1,20 @@
+{
+  "name": "datadog-node-app",
+  "version": "1.0.0",
+  "description": "Node.js application fully instrumented with Datadog APM, custom metrics and structured logs",
+  "main": "src/tracer.js",
+  "scripts": {
+    "start": "node src/tracer.js",
+    "dev": "node src/tracer.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "dd-trace": "^5.30.0",
+    "express": "^4.21.2",
+    "hot-shots": "^10.2.1",
+    "pino": "^9.5.0"
+  },
+  "license": "MIT"
+}
