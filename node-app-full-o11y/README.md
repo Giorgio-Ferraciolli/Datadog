@@ -1,43 +1,43 @@
 # Datadog Node.js App
 
-Node.js application fully instrumented with **Datadog APM**, **continuous profiling**, **runtime metrics**, **custom DogStatsD metrics** and **structured JSON logs with trace correlation**.
+Aplicação Node.js totalmente instrumentada com **Datadog APM**, **profiling contínuo**, **runtime metrics**, **métricas customizadas via DogStatsD** e **logs estruturados em JSON com correlação de traces**.
 
-The project is 100% containerized — **the only prerequisite is Docker**. You do not need Node.js, npm, or any other tool installed locally.
+O projeto é 100% containerizado — **o único pré-requisito é ter Docker instalado**. Você não precisa de Node.js, npm ou qualquer outra ferramenta na sua máquina.
 
 ---
 
-## Prerequisites
+## Pré-requisitos
 
 - [Docker](https://docs.docker.com/get-docker/) (Engine 20.10+)
-- [Docker Compose v2](https://docs.docker.com/compose/install/) (ships with Docker Desktop; on Linux install `docker-compose-plugin`)
-- A Datadog account and an API key — get one at <https://app.datadoghq.com/organization-settings/api-keys>
+- [Docker Compose v2](https://docs.docker.com/compose/install/) (já vem no Docker Desktop; no Linux, instale o pacote `docker-compose-plugin`)
+- Uma conta Datadog e uma API key — gere a sua em <https://app.datadoghq.com/organization-settings/api-keys>
 
 ---
 
-## Quick start
+## Início rápido
 
 ```bash
-# 1. Copy the env template
+# 1. Copie o template de variáveis de ambiente
 cp .env.example .env
 
-# 2. Edit .env and set DD_API_KEY to your real key.
-#    Optionally adjust DD_SITE (e.g. datadoghq.eu for EU1).
+# 2. Edite o .env e coloque sua DD_API_KEY real.
+#    Ajuste DD_SITE se sua conta não estiver na região US1 (ex: datadoghq.eu para EU1).
 $EDITOR .env
 
-# 3. Build and run
+# 3. Suba os containers
 docker compose up --build
 ```
 
-That's it. The app is now listening on <http://localhost:3000> and shipping data to Datadog.
+Pronto. A aplicação fica escutando em <http://localhost:3000> e já começa a enviar dados para o Datadog.
 
-To run detached:
+Para rodar em background:
 
 ```bash
 docker compose up --build -d
 docker compose logs -f app
 ```
 
-To stop and clean up:
+Para parar e limpar tudo:
 
 ```bash
 docker compose down
@@ -45,27 +45,27 @@ docker compose down
 
 ---
 
-## Exercising the endpoints
+## Testando os endpoints
 
 ```bash
 # Health
 curl http://localhost:3000/health
 
-# Users — emits a custom span, an artificial DB latency and a queue gauge
+# Users — gera um span customizado, latência artificial e atualiza o gauge de fila
 curl 'http://localhost:3000/users?user_id=u-42'
 
-# Create an order — emits business tags and a custom counter
+# Cria uma ordem — gera tags de negócio e incrementa um counter customizado
 curl -X POST http://localhost:3000/orders \
   -H 'Content-Type: application/json' \
   -d '{"user_id":"u-42","product":"widget-001","amount":129.9}'
 
-# Force an error to exercise the error pipeline
+# Força um erro para exercitar o pipeline de tratamento de erros
 curl -X POST 'http://localhost:3000/orders?fail=true' \
   -H 'Content-Type: application/json' \
   -d '{"user_id":"u-42","product":"widget-001"}'
 ```
 
-Generate a bit of traffic so dashboards have data to show:
+Gere um pouco de tráfego para popular os dashboards:
 
 ```bash
 for i in $(seq 1 50); do
@@ -73,7 +73,7 @@ for i in $(seq 1 50); do
   curl -s -X POST http://localhost:3000/orders \
     -H 'Content-Type: application/json' \
     -d '{"user_id":"u-'$i'","product":"widget-001"}' > /dev/null
-  # one in five fails on purpose
+  # 1 em cada 5 falha de propósito
   if [ $((i % 5)) -eq 0 ]; then
     curl -s -X POST 'http://localhost:3000/orders?fail=true' \
       -H 'Content-Type: application/json' -d '{}' > /dev/null
@@ -81,93 +81,138 @@ for i in $(seq 1 50); do
 done
 ```
 
+> Dica: o script `load.sh` (na raiz do repo, se incluído) faz isso continuamente com distribuição aleatória entre os endpoints — útil para encher os gráficos com dados realistas.
+
 ---
 
-## Verifying in Datadog
+## Verificando no Datadog
 
-Allow ~1–2 minutes after the first request for data to appear.
+Aguarde ~1–2 minutos após as primeiras requisições para os dados aparecerem.
 
-### Traces in APM
+### Traces no APM
 
-1. Open **APM → Services** in the Datadog UI: <https://app.datadoghq.com/apm/services>
-2. Filter by `env:development` (or whatever you set `DD_ENV` to).
-3. You should see the service `datadog-node-app` listed.
-4. Click it, then open **Traces** to inspect individual requests. Each `/users` request will show a child `db.query.users` span and each `/orders` a `payment.process` span. Failed requests appear with the **error** indicator and the `error.message` tag attached.
+1. Abra **APM → Services** no Datadog: <https://app.datadoghq.com/apm/services>
+2. Filtre por `env:development` (ou o valor que você colocou em `DD_ENV`).
+3. O service `datadog-node-app` deve aparecer na lista.
+4. Clique nele e abra **Traces** para inspecionar requisições individuais. Cada chamada em `/users` mostra um span filho `db.query.users` e cada `/orders` mostra um `payment.process`. Requisições com erro vêm marcadas com o indicador de erro e a tag `error.message` anexada.
 
-### Continuous profiling
+### Profiling contínuo
 
-1. Open **APM → Profiling → Profiles**: <https://app.datadoghq.com/profiling>
-2. Filter by `service:datadog-node-app`.
-3. CPU, wall-time and heap profiles are uploaded every minute.
+1. Abra **APM → Profiling → Profiles**: <https://app.datadoghq.com/profiling>
+2. Filtre por `service:datadog-node-app`.
+3. Perfis de CPU, wall-time e heap são enviados a cada minuto.
 
-### Custom metrics in Metrics Explorer
+### Métricas customizadas no Metrics Explorer
 
-1. Open **Metrics → Explorer**: <https://app.datadoghq.com/metric/explorer>
-2. The application emits these custom metrics (all prefixed with `app.`):
+1. Abra **Metrics → Explorer**: <https://app.datadoghq.com/metric/explorer>
+2. A aplicação emite estas métricas customizadas (todas com prefixo `app.`):
 
-| Metric                          | Type      | Tags                                            |
-|---------------------------------|-----------|-------------------------------------------------|
-| `app.requests.count`            | counter   | `endpoint`, `method`, `status_code`, `service`, `env`, `version` |
-| `app.requests.latency`          | histogram | same as above                                   |
-| `app.queue.pending_jobs`        | gauge     | `service`, `env`, `version`                     |
-| `app.orders.created`            | counter   | `product`, `user_id`, `service`, `env`, `version` |
-| `app.errors.count`              | counter   | `endpoint`, `method`, `error_type`              |
-| `app.process.uncaught_exception`| counter   | `error_type`                                    |
-| `app.process.unhandled_rejection`| counter  | `error_type`                                    |
+| Métrica                          | Tipo      | Tags                                            |
+|----------------------------------|-----------|-------------------------------------------------|
+| `app.requests.count`             | counter   | `endpoint`, `method`, `status_code`, `service`, `env`, `version` |
+| `app.requests.latency`           | histogram | mesmas tags acima                               |
+| `app.queue.pending_jobs`         | gauge     | `service`, `env`, `version`                     |
+| `app.orders.created`             | counter   | `product`, `user_id`, `service`, `env`, `version` |
+| `app.errors.count`               | counter   | `endpoint`, `method`, `error_type`              |
+| `app.process.uncaught_exception` | counter   | `error_type`                                    |
+| `app.process.unhandled_rejection`| counter   | `error_type`                                    |
 
-   Try `avg:app.requests.latency{service:datadog-node-app}` grouped by `endpoint`.
+   Experimente: `avg:app.requests.latency{service:datadog-node-app}` agrupado por `endpoint`.
 
 ### Runtime metrics
 
-Runtime metrics appear under `runtime.node.*` (event loop lag, GC, heap usage, etc.). Search the Metrics Explorer for `runtime.node` and filter by `service:datadog-node-app`.
+As métricas de runtime aparecem com o prefixo `runtime.node.*` (event loop lag, GC, uso de heap, etc.). Pesquise `runtime.node` no Metrics Explorer e filtre por `service:datadog-node-app`.
 
 ### Logs
 
-1. Open **Logs → Live Tail**: <https://app.datadoghq.com/logs/livetail>
-2. Filter by `service:datadog-node-app`.
-3. Each log line is JSON and carries `dd.trace_id` / `dd.span_id`, so you can click through directly to the matching trace in APM.
+1. Abra **Logs → Live Tail**: <https://app.datadoghq.com/logs/livetail>
+2. Filtre por `service:datadog-node-app`.
+3. Cada linha de log é um JSON e carrega `dd.trace_id` / `dd.span_id`, então é possível clicar e ir direto para o trace correspondente no APM.
 
 ---
 
-## Project layout
+## Estrutura do projeto
 
 ```
 .
-├── Dockerfile                  # Multi-stage build (build + runtime)
-├── docker-compose.yml          # app + datadog-agent services
-├── .env.example                # Template for environment variables
+├── Dockerfile                  # Build multi-stage (build + runtime)
+├── docker-compose.yml          # Serviços: app + datadog-agent
+├── .env.example                # Template das variáveis de ambiente
 ├── package.json
 └── src/
-    ├── tracer.js               # Entry point — initializes dd-trace BEFORE anything else
-    ├── app.js                  # Express bootstrap, middlewares, error handlers
+    ├── tracer.js               # Entry point — inicializa dd-trace ANTES de tudo
+    ├── app.js                  # Bootstrap do Express, middlewares e error handlers
     ├── config/
-    │   └── index.js            # Centralized env-var reading
+    │   └── index.js            # Leitura centralizada de variáveis de ambiente
     ├── middleware/
-    │   ├── requestMetrics.js   # Per-request counter + latency histogram
-    │   └── errorHandler.js     # Marks span as errored + logs + metric
+    │   ├── requestMetrics.js   # Counter de requisições + histograma de latência
+    │   └── errorHandler.js     # Marca o span como erro, gera log e métrica
     ├── routes/
     │   ├── health.js           # GET /health
-    │   ├── users.js            # GET /users — custom span + queue gauge
-    │   └── orders.js           # POST /orders — business tags, ?fail=true
+    │   ├── users.js            # GET /users — span customizado + gauge de fila
+    │   └── orders.js           # POST /orders — tags de negócio, ?fail=true
     └── utils/
-        ├── logger.js           # pino, JSON, trace-correlated
-        └── metrics.js          # hot-shots (DogStatsD) wrapper
+        ├── logger.js           # pino, JSON, correlacionado com traces
+        └── metrics.js          # Wrapper do hot-shots (DogStatsD)
 ```
 
 ---
 
-## Troubleshooting
+## Trocando de ambiente Datadog
 
-**The agent exits immediately with `DD_API_KEY is required`.**
-Set `DD_API_KEY` in `.env`. Compose refuses to start without it.
+Para apontar a aplicação para outra conta Datadog (ou outra região), edite o `.env`:
 
-**No traces show up in the Datadog UI.**
-- Check the agent is healthy: `docker compose logs datadog-agent | grep -i "agent.*started"`
-- Make sure `DD_SITE` matches your account region (EU users need `datadoghq.eu`).
-- Inside the app container, the agent must be reachable at `datadog-agent:8126`. This is handled automatically by the compose network.
+```bash
+DD_API_KEY=sua_nova_chave
+DD_SITE=datadoghq.com   # ou datadoghq.eu, us5.datadoghq.com etc.
+```
 
-**Metrics show up but logs don't.**
-Datadog log collection from containers requires `DD_LOGS_ENABLED=true` and read access to `/var/run/docker.sock`. Both are already configured in `docker-compose.yml`; on SELinux-enabled hosts you may need to add the `:z` flag to that volume mount.
+E reinicie apenas o agent (a app não precisa reiniciar):
 
-**Profiler fails to start with a native module error.**
-Rebuild without cache: `docker compose build --no-cache app`. The Dockerfile installs the required toolchain (python3, make, g++) in the build stage.
+```bash
+docker compose up -d --force-recreate datadog-agent
+```
+
+Sites comuns:
+
+| Região | `DD_SITE`                |
+|--------|--------------------------|
+| US1    | `datadoghq.com`          |
+| US3    | `us3.datadoghq.com`      |
+| US5    | `us5.datadoghq.com`      |
+| EU1    | `datadoghq.eu`           |
+| AP1    | `ap1.datadoghq.com`      |
+
+Para descobrir o site da sua conta, olhe a URL do Datadog no navegador depois de logar.
+
+---
+
+## Solução de problemas
+
+**O agent encerra imediatamente com a mensagem `DD_API_KEY is required`.**
+Configure a `DD_API_KEY` no `.env`. O Compose se recusa a subir sem ela.
+
+**Nenhum trace aparece na UI do Datadog.**
+- Verifique se o agent está saudável: `docker compose logs datadog-agent | grep -i "agent.*started"`
+- Confirme que `DD_SITE` bate com a região da sua conta (usuários EU precisam de `datadoghq.eu`).
+- Confira o status do APM no agent:
+  ```bash
+  docker exec datadog-agent agent status | grep -A 10 "APM Agent"
+  ```
+- Dentro do container da app, o agent precisa estar acessível em `datadog-agent:8126`. A rede do Compose já cuida disso automaticamente.
+
+**Erro ao subir: `failed to bind host port 0.0.0.0:8125/udp: address already in use`.**
+Significa que outro processo (talvez outro agent Datadog rodando no host) já está usando essa porta. Soluções:
+- Remova o bloco `ports:` do serviço `datadog-agent` no `docker-compose.yml` (a app se comunica com o agent pela rede interna do Compose, então a porta exposta não é necessária).
+- Ou remapeie para uma porta livre no host (mantenha o lado interno em 8125):
+  ```yaml
+  ports:
+    - "28125:8125/udp"
+    - "8126:8126/tcp"
+  ```
+
+**As métricas aparecem mas os logs não.**
+A coleta de logs de containers no Datadog precisa de `DD_LOGS_ENABLED=true` e acesso de leitura ao `/var/run/docker.sock`. Os dois já estão configurados no `docker-compose.yml`; em hosts com SELinux ativo, talvez seja necessário adicionar a flag `:z` no volume.
+
+**O profiler falha ao iniciar com erro de módulo nativo.**
+Faça o rebuild sem cache: `docker compose build --no-cache app`. O Dockerfile já instala o toolchain necessário (python3, make, g++) no stage de build.
